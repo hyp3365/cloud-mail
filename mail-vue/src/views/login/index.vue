@@ -346,7 +346,7 @@ async function oauthGetUser() {
 
     bindForm.oauthUserId = data.userInfo.oauthUserId;
 
-    if (!data.token) {
+    if (!data.loggedIn) {
       showBindForm.value = true
       oauthLoading.value = false
       ElMessage({
@@ -358,7 +358,7 @@ async function oauthGetUser() {
       return;
     }
 
-    saveToken(data.token);
+    markLoggedIn();
   }).catch(() => {
     oauthLoading.value = false
   })
@@ -416,8 +416,8 @@ function bind() {
   const form = {email, oauthUserId: bindForm.oauthUserId, code: bindForm.code}
 
   bindLoading.value = true
-  oauthBindUser(form).then(data => {
-    saveToken(data.token)
+  oauthBindUser(form).then(() => {
+    markLoggedIn()
   }).catch(() => {
     bindLoading.value = false
   })
@@ -457,15 +457,17 @@ const submit = () => {
   }
 
   loginLoading.value = true
-  login(email, form.password).then(async data => {
-    await saveToken(data.token)
+  login(email, form.password).then(async () => {
+    await markLoggedIn()
   }).finally(() => {
     loginLoading.value = false
   })
 }
 
-async function saveToken(token) {
-  localStorage.setItem('token', token)
+// 登录成功后只记一个“已登录”标记；真凭证在后端发的 HttpOnly Cookie 里，
+// 浏览器下次请求自动带上，前端 JS 从头到尾碰不到 token
+async function markLoggedIn() {
+  localStorage.setItem('loggedIn', '1')
   refreshWebsiteConfig()
   const user = await loginUserInfo();
   accountStore.currentAccountId = user.account.accountId;

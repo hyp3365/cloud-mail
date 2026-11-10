@@ -4,12 +4,13 @@ import i18n from "@/i18n/index.js";
 import {useSettingStore} from "@/store/setting.js";
 
 let http = axios.create({
-    baseURL: import.meta.env.VITE_BASE_URL
+    baseURL: import.meta.env.VITE_BASE_URL,
+    // 登录凭证在 HttpOnly Cookie 里，浏览器自动带上；前端 JS 不再碰 token
+    withCredentials: true
 });
 
 http.interceptors.request.use(config => {
     const { lang } = useSettingStore();
-    config.headers.Authorization = `${localStorage.getItem('token')}`
     config.headers['accept-language'] = lang
     return config
 })
@@ -33,7 +34,7 @@ http.interceptors.response.use((res) => {
                     grouping: true,
                     repeatNum: -4,
                 })
-                localStorage.removeItem('token')
+                localStorage.removeItem('loggedIn')
                 router.replace('/login')
                 reject(data)
             } else if (data.code === 403) {

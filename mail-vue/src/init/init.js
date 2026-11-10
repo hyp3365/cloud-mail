@@ -14,7 +14,7 @@ export async function init() {
     const userStore = useUserStore();
     const accountStore = useAccountStore();
 
-    const token = localStorage.getItem('token');
+    const loggedIn = localStorage.getItem('loggedIn');
     if (!settingStore.lang) {
         let lang = navigator.language.split('-')[0]
         lang = lang === 'zh' ? lang : 'en'
@@ -25,7 +25,7 @@ export async function init() {
 
     let setting = null;
 
-    if (token) {
+    if (loggedIn) {
         const userPromise = loginUserInfo().catch(e => {
             console.error(e);
             return null;

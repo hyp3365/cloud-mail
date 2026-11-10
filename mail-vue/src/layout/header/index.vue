@@ -244,7 +244,7 @@ function changeAside() {
 function clickLogout() {
   logoutLoading.value = true
   logout().then(() => {
-    localStorage.removeItem("token")
+    localStorage.removeItem("loggedIn")
     router.replace('/login')
   }).finally(() => {
     logoutLoading.value = false

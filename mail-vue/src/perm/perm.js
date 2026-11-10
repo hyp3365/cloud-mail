@@ -68,6 +68,15 @@ const routers = {
             name: 'user',
             menu: true
         }
+    }, {
+        path: '/audit-log',
+        name: 'audit',
+        component: () => import('@/views/audit/index.vue'),
+        meta: {
+            title: 'auditLog',
+            name: 'audit',
+            menu: true
+        }
     }],
     'role:query': [{
         path: '/role',

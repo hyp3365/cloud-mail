@@ -33,8 +33,32 @@ const dbInit = {
 		await this.v3_2DB(c);
 		await this.v3_3DB(c);
 		await this.v3_4DB(c);
+		await this.v3_5DB(c);
 		await settingService.refresh(c);
 		return c.text('success');
+	},
+
+	async v3_5DB(c) {
+		try {
+			await c.env.db.prepare(`ALTER TABLE email ADD COLUMN auth_result TEXT NOT NULL DEFAULT '';`).run();
+		} catch (e) {
+			console.warn(`跳过字段：${e.message}`);
+		}
+		try {
+			await c.env.db.prepare(`
+		  CREATE TABLE IF NOT EXISTS audit_log (
+			audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			email TEXT NOT NULL DEFAULT '',
+			action TEXT NOT NULL DEFAULT '',
+			detail TEXT NOT NULL DEFAULT '',
+			ip TEXT NOT NULL DEFAULT '',
+			create_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+		  )
+		`).run();
+		} catch (e) {
+			console.warn(`跳过审计表：${e.message}`);
+		}
 	},
 
 	async v3_4DB(c) {

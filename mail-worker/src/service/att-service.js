@@ -23,7 +23,12 @@ const attService = {
 			if (!attachment.contentId) {
 				metadate.contentDisposition = `attachment;filename=${attachment.filename}`
 			} else {
-				metadate.contentDisposition = `inline;filename=${attachment.filename}`
+				// CID 内联附件只有图片才 inline（正文要显示）；其他类型一律 attachment，
+				// 否则 text/html 这类附件被直接打开时会在邮箱同源渲染执行
+				const isImage = String(attachment.mimeType || '').toLowerCase().startsWith('image/');
+				metadate.contentDisposition = isImage
+					? `inline;filename=${attachment.filename}`
+					: `attachment;filename=${attachment.filename}`
 				metadate.cacheControl = `max-age=259200`
 			}
 
@@ -183,10 +188,14 @@ const attService = {
 			if (!attData.buff) {
 				continue;
 			}
+			// 内嵌附件只有图片才 inline，其他类型一律 attachment（同 addAtt 的原因）
+			const isImage = String(attData.mimeType || '').toLowerCase().startsWith('image/');
 			await r2Service.putObj(c, attData.key, attData.buff, {
 				contentType: attData.mimeType,
 				cacheControl: `max-age=259200`,
-				contentDisposition: `inline;filename=${attData.filename}`
+				contentDisposition: isImage
+					? `inline;filename=${attData.filename}`
+					: `attachment;filename=${attData.filename}`
 			});
 			delete attData.buff;
 		}

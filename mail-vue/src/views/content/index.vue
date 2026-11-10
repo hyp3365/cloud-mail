@@ -37,6 +37,13 @@
                 <div>{{ formatDetailDate(email.createTime) }}</div>
               </div>
             </div>
+            <div class="auth-badge" v-if="email.type === 0">
+              <el-tag v-if="authStatus === 'pass'" type="success" size="small" disable-transitions>{{ $t('authVerified') }}</el-tag>
+              <el-tag v-else-if="authStatus === 'fail'" type="danger" size="small" disable-transitions>{{ $t('authFailed') }}</el-tag>
+              <el-tag v-else type="info" size="small" disable-transitions>{{ $t('authUnknown') }}</el-tag>
+              <span class="auth-detail" v-if="authResult">SPF {{ authResult.spf || '-' }} · DKIM {{ authResult.dkim || '-' }} · DMARC {{ authResult.dmarc || '-' }}</span>
+            </div>
+            <el-alert v-if="isOwnDomainSpoof" :closable="false" :title="$t('authSpoofWarning')" class="email-msg" type="error" show-icon />
             <el-alert v-if="email.status === 3" :closable="false" :title="toMessage(email.message)" class="email-msg" type="error" show-icon />
             <el-alert v-if="email.status === 4" :closable="false" :title="$t('complained')" class="email-msg" type="warning" show-icon />
             <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
@@ -120,6 +127,25 @@ const email = computed(() => emailStore.contentData.email || {
   content: '',
   text: '',
   recipient: '[]',
+})
+
+// 收件时存的 SPF/DKIM/DMARC 结果；自己域名验证失败 = 几乎可以肯定是伪造
+const authResult = computed(() => {
+  try { return JSON.parse(email.value.authResult || '') } catch (e) { return null }
+})
+const authStatus = computed(() => {
+  if (!authResult.value) return 'unknown'
+  const { spf, dkim, dmarc } = authResult.value
+  if ([spf, dkim, dmarc].includes('fail')) return 'fail'
+  if (spf === 'pass' || dkim === 'pass' || dmarc === 'pass') return 'pass'
+  return 'unknown'
+})
+const isOwnDomainSpoof = computed(() => {
+  if (authStatus.value !== 'fail') return false
+  const domain = String(email.value.sendEmail || '').split('@')[1]?.toLowerCase()
+  if (!domain) return false
+  const ownDomains = (settingStore.settings.domainList || []).map(d => String(d).replace(/^@/, '').toLowerCase())
+  return ownDomains.includes(domain)
 })
 
 const sentViaEmail = computed(() => {
@@ -536,6 +562,17 @@ const handleDelete = () => {
   bottom: 0;
   background: var(--message-block-color); /* 半透明黑色蒙层 */
   pointer-events: none; /* 不影响点击 */
+}
+
+.auth-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  .auth-detail {
+    color: var(--regular-text-color);
+    font-size: 12px;
+  }
 }
 
 .email-text {

@@ -10,6 +10,7 @@ import user from '../entity/user';
 import verifyUtils from '../utils/verify-utils';
 import { t } from '../i18n/i18n.js';
 import emailUtils from '../utils/email-utils';
+import auditService from './audit-service';
 
 const roleService = {
 
@@ -43,7 +44,7 @@ const roleService = {
 
 		await orm(c).insert(rolePerm).values(rolePermList).run();
 
-
+		await auditService.record(c, { ...auditService.actor(c), action: 'addRole', detail: `role=${name}` });
 	},
 
 	async roleList(c) {
@@ -90,6 +91,7 @@ const roleService = {
 			await orm(c).insert(rolePerm).values(rolePermList).run();
 		}
 
+		await auditService.record(c, { ...auditService.actor(c), action: 'setRole', detail: `roleId=${roleId} role=${name}` });
 	},
 
 	async delete(c, params) {
@@ -113,6 +115,7 @@ const roleService = {
 		await orm(c).delete(rolePerm).where(eq(rolePerm.roleId, roleId)).run();
 		await orm(c).delete(role).where(eq(role.roleId, roleId)).run();
 
+		await auditService.record(c, { ...auditService.actor(c), action: 'deleteRole', detail: `roleId=${roleId}` });
 	},
 
 	roleSelectUse(c) {
@@ -130,6 +133,7 @@ const roleService = {
 		}
 		await orm(c).update(role).set({ isDefault: 0 }).run();
 		await orm(c).update(role).set({ isDefault: 1 }).where(eq(role.roleId, params.roleId)).run();
+		await auditService.record(c, { ...auditService.actor(c), action: 'setDefaultRole', detail: `roleId=${params.roleId}` });
 	},
 
 	selectById(c, roleId) {

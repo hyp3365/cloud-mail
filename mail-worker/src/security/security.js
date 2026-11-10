@@ -1,6 +1,7 @@
 import BizError from '../error/biz-error';
 import constant from '../const/constant';
 import jwtUtils from '../utils/jwt-utils';
+import cookieUtils from '../utils/cookie-utils';
 import KvConst from '../const/kv-const';
 import dayjs from 'dayjs';
 import userService from '../service/user-service';
@@ -58,7 +59,8 @@ const requirePerms = [
 	'/regKey/list',
 	'/regKey/delete',
 	'/regKey/clearNotUse',
-	'/regKey/history'
+	'/regKey/history',
+	'/audit/list'
 ];
 
 const premKey = {
@@ -72,7 +74,7 @@ const premKey = {
 	'role:set': ['/role/set','/role/setDefault'],
 	'role:query': ['/role/list', '/role/tree'],
 	'role:delete': ['/role/delete'],
-	'user:query': ['/user/list','/user/allAccount'],
+	'user:query': ['/user/list','/user/allAccount','/audit/list'],
 	'user:add': ['/user/add'],
 	'user:reset-send': ['/user/resetSendCount'],
 	'user:set-pwd': ['/user/setPwd'],
@@ -112,7 +114,7 @@ app.use('*', async (c, next) => {
 	}
 
 
-	const jwt = c.req.header(constant.TOKEN_HEADER);
+	const jwt = cookieUtils.getAuthToken(c);
 
 	const result = await jwtUtils.verifyToken(c, jwt);
 
@@ -162,7 +164,23 @@ app.use('*', async (c, next) => {
 
 	c.set('user',authInfo.user)
 
-	return await next();
+	// 自动续期：JWT 剩不到 JWT_RENEW_BEFORE 时，用同一个 uuid 续发一张新 JWT，
+	// KV 白名单不用改（uuid 不变）；新 token 经 Set-Cookie 发回，浏览器自动换存，前端不用管
+	let renewedToken = null
+	const nowSeconds = Math.floor(Date.now() / 1000)
+	if (result.exp && result.exp - nowSeconds < constant.JWT_RENEW_BEFORE) {
+		try {
+			renewedToken = await jwtUtils.generateToken(c, { userId, token }, constant.JWT_EXPIRE)
+		} catch (e) {
+			console.error('续发 JWT 失败：', e)
+		}
+	}
+
+	await next()
+
+	if (renewedToken) {
+		cookieUtils.setAuthCookie(c, renewedToken)
+	}
 });
 
 function permKeyToPaths(permKeys) {

@@ -102,18 +102,19 @@ router.beforeEach((to, from, next) => {
         }, 100)
     }
 
-    const token = localStorage.getItem('token')
+    // 只是个“已登录”标记，不是凭证；真凭证在 HttpOnly Cookie 里，过期了接口会返回 401 再跳登录
+    const loggedIn = localStorage.getItem('loggedIn')
 
-    if (!token && !to.path.startsWith('/login')) {
+    if (!loggedIn && !to.path.startsWith('/login')) {
         return next({name: 'login'})
     }
 
-    if (!token && to.path.startsWith('/login')) {
+    if (!loggedIn && to.path.startsWith('/login')) {
         loadBackground(next)
         return
     }
 
-    if (token && to.path.startsWith('/login')) {
+    if (loggedIn && to.path.startsWith('/login')) {
         return next(from.path)
     }
 

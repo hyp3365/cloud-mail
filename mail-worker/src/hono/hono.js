@@ -4,7 +4,17 @@ const app = new Hono();
 import result from '../model/result';
 import { cors } from 'hono/cors';
 
-app.use('*', cors());
+// 凭证模式：Cookie 靠浏览器自动带，跨域开发时需要回显请求来源；
+// 生产是同源（/api），CORS 不起作用。SameSite=Strict 的 Cookie 本来就不会被跨站请求带上，
+// 所以这里回显来源不是安全边界，只是让开发环境能用
+app.use('*', cors({ origin: (origin) => origin || '', credentials: true }));
+
+// API 响应也加 nosniff，防止浏览器把 JSON 猜成 HTML 执行
+app.use('*', async (c, next) => {
+	await next();
+	c.header('X-Content-Type-Options', 'nosniff');
+	c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+});
 
 app.onError((err, c) => {
 	if (err.name === 'BizError') {

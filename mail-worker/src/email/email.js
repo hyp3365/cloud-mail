@@ -62,6 +62,14 @@ export async function email(message, env, ctx) {
 			return;
 		}
 
+		// 发件人鉴权：From 是本站域名时，必须有对齐的认证通过，否则拒收
+		const authReject = checkSenderAuth(email, env);
+
+		if (authReject) {
+			message.setReject(authReject);
+			return;
+		}
+
 		let account = await accountService.selectByEmailIncludeDel({ env: env }, message.to);
 
 		if (!account) {
@@ -115,6 +123,7 @@ export async function email(message, env, ctx) {
 			senderEmail: message.from || '',
 			subject: email.subject,
 			code,
+			authResult: parseAuthResults(email),
 			content: email.html,
 			text: email.text,
 			cc: email.cc ? JSON.stringify(email.cc) : '[]',
@@ -202,6 +211,68 @@ export async function email(message, env, ctx) {
 		console.error('邮件接收异常: ', e);
 		throw e
 	}
+}
+
+// Cloudflare Email Routing 在信头加的 Authentication-Results 里找 SPF/DKIM/DMARC 结果，
+// 顺带取各结果对应的域名（smtp.mailfrom / header.d / header.from），供发件人鉴权判断对齐
+function parseAuthDetails(email) {
+	try {
+		const ar = email.headers?.find(h => h.key === 'authentication-results')?.value || ''
+		if (!ar) return { hasHeader: false, spf: '', dkim: '', dmarc: '', spfMailFrom: '', dkimDomain: '', dmarcFrom: '' }
+		const pick = (name) => {
+			const m = ar.match(new RegExp(name + '=(\\w+)', 'i'))
+			return m ? m[1].toLowerCase() : ''
+		}
+		const pickDomain = (name) => {
+			const m = ar.match(new RegExp(name + '=([^\\s;]+)', 'i'))
+			return m ? m[1].toLowerCase() : ''
+		}
+		return {
+			hasHeader: true,
+			spf: pick('spf'),
+			dkim: pick('dkim'),
+			dmarc: pick('dmarc'),
+			spfMailFrom: pickDomain('smtp.mailfrom'),
+			dkimDomain: pickDomain('header.d'),
+			dmarcFrom: pickDomain('header.from'),
+		}
+	} catch (e) {
+		return { hasHeader: false, spf: '', dkim: '', dmarc: '', spfMailFrom: '', dkimDomain: '', dmarcFrom: '' }
+	}
+}
+
+function parseAuthResults(email) {
+	const d = parseAuthDetails(email)
+	if (!d.hasHeader || (!d.spf && !d.dkim && !d.dmarc)) return ''
+	return JSON.stringify({ spf: d.spf, dkim: d.dkim, dmarc: d.dmarc })
+}
+
+// 自有域名发来的信必须有对齐的认证通过，否则拒收：攻击者伪造本站域名时，
+// SPF/DKIM 都对不上本站域名（DMARC 也就过不了）。非本站域名的信只记徽章，不拒收。
+// 注意：经 Resend 从本站域名发出的信，DKIM 的 header.d 必须是本站域名才算通过；
+// Resend 里没验证本站域名的话，自己发的信也会被拒——先去 Resend 确认域名 Verified。
+function checkSenderAuth(email, env) {
+	const fromAddress = email.from?.address || '';
+	const fromDomain = emailUtils.getDomain(fromAddress)?.toLowerCase();
+	if (!fromDomain) return null;
+	let ownDomains = env.domain;
+	if (typeof ownDomains === 'string') {
+		try { ownDomains = JSON.parse(ownDomains); } catch (e) { ownDomains = []; }
+	}
+	ownDomains = (Array.isArray(ownDomains) ? ownDomains : []).map(d => String(d).replace(/^@/, '').toLowerCase());
+	const isOwn = ownDomains.some(d => fromDomain === d || fromDomain.endsWith('.' + d));
+	if (!isOwn) return null;
+
+	const d = parseAuthDetails(email);
+	if (!d.hasHeader) {
+		return 'Missing Authentication-Results for own domain';
+	}
+	const alignedPass =
+		(d.spf === 'pass' && d.spfMailFrom === fromDomain) ||
+		(d.dkim === 'pass' && d.dkimDomain === fromDomain) ||
+		(d.dmarc === 'pass' && d.dmarcFrom === fromDomain);
+	if (alignedPass) return null;
+	return 'Sender authentication failed for own domain';
 }
 
 function checkBlock(blackSubjectStr, blackContentStr, blackFromStr, email) {

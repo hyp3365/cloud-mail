@@ -8,6 +8,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 import { eq } from 'drizzle-orm';
 import jwtUtils from '../utils/jwt-utils';
+import constant from '../const/constant';
 import emailMsgTemplate from '../template/email-msg';
 import emailTextTemplate from '../template/email-text';
 import emailHtmlTemplate from '../template/email-html';
@@ -49,7 +50,8 @@ const telegramService = {
 
 		const tgChatIds = tgChatId.split(',');
 
-		const jwtToken = await jwtUtils.generateToken(c, { emailId: email.emailId })
+		// View 链接的 token 只活 7 天（以前永不过期）；已发出去的老链接不受影响，仍长期有效
+		const jwtToken = await jwtUtils.generateToken(c, { emailId: email.emailId }, constant.JWT_EXPIRE)
 
 		const webAppUrl = customDomain ? `${domainUtils.toOssDomain(customDomain)}/api/telegram/getEmail/${jwtToken}` : 'https://www.cloudflare.com/404'
 		const inlineKeyboard = [

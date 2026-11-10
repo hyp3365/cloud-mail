@@ -19,6 +19,8 @@ export const email = sqliteTable('email', {
 	inReplyTo: text('in_reply_to').default(''),
 	relation: text('relation').default(''),
 	messageId: text('message_id').default(''),
+	// 收件时从 Authentication-Results 头解析的 SPF/DKIM/DMARC 结果，JSON 如 {"spf":"pass","dkim":"fail","dmarc":"pass"}；空表示未知
+	authResult: text('auth_result').default('').notNull(),
 	type: integer('type').default(0).notNull(),
 	status: integer('status').default(0).notNull(),
 	resendEmailId: text('resend_email_id'),

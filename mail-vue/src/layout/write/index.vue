@@ -410,7 +410,7 @@ async function sendEmail() {
       position: 'bottom-right'
     })
     if (e.code === 401) {
-      localStorage.removeItem('token');
+      localStorage.removeItem('loggedIn');
       router.replace('/login');
     }
     show.value = true

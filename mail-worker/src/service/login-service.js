@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import { toUtc } from '../utils/date-uitil';
 import { t } from '../i18n/i18n.js';
 import verifyRecordService from './verify-record-service';
+import auditService from './audit-service';
 
 const loginService = {
 
@@ -248,7 +249,7 @@ const loginService = {
 		}
 
 		const uuid = uuidv4();
-		const jwt = await JwtUtils.generateToken(c,{ userId: userRow.userId, token: uuid });
+		const jwt = await JwtUtils.generateToken(c, { userId: userRow.userId, token: uuid }, constant.JWT_EXPIRE);
 
 		let authInfo = await c.env.kv.get(KvConst.AUTH_INFO + userRow.userId, { type: 'json' });
 
@@ -275,6 +276,7 @@ const loginService = {
 		await userService.updateUserInfo(c, userRow.userId);
 
 		await c.env.kv.put(KvConst.AUTH_INFO + userRow.userId, JSON.stringify(authInfo), { expirationTtl: constant.TOKEN_EXPIRE });
+		await auditService.record(c, { userId: userRow.userId, email: userRow.email, action: 'login' });
 		return jwt;
 	},
 
@@ -284,6 +286,7 @@ const loginService = {
 		const index = authInfo.tokens.findIndex(item => item === token);
 		authInfo.tokens.splice(index, 1);
 		await c.env.kv.put(KvConst.AUTH_INFO + userId, JSON.stringify(authInfo), { expirationTtl: constant.TOKEN_EXPIRE });
+		await auditService.record(c, { ...auditService.actor(c), action: 'logout' });
 	}
 
 };

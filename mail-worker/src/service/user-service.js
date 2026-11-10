@@ -20,6 +20,7 @@ import {oauth} from "../entity/oauth";
 import oauthService from "./oauth-service";
 import settingService from './setting-service';
 import starService from './star-service';
+import auditService from './audit-service';
 
 const userService = {
 
@@ -65,6 +66,7 @@ const userService = {
 		}
 		const { salt, hash } = await cryptoUtils.hashPassword(password);
 		await orm(c).update(user).set({ password: hash, salt: salt }).where(eq(user.userId, userId)).run();
+		await auditService.record(c, { ...auditService.actor(c), action: 'resetPassword', detail: `targetUserId=${userId}` });
 	},
 
 	selectByEmail(c, email) {
@@ -105,6 +107,7 @@ const userService = {
 		}
 		await orm(c).update(user).set({ isDel: isDel.DELETE }).where(eq(user.userId, userId)).run();
 		await c.env.kv.delete(kvConst.AUTH_INFO + userId)
+		await auditService.record(c, { ...auditService.actor(c), action: 'deleteUser', detail: `targetUserId=${userId}` });
 	},
 
 	async physicsDelete(c, params) {
@@ -270,6 +273,7 @@ const userService = {
 		const { password, userId } = params;
 		await this.resetPassword(c, { password }, userId);
 		await c.env.kv.delete(KvConst.AUTH_INFO + userId);
+		await auditService.record(c, { ...auditService.actor(c), action: 'setPwd', detail: `targetUserId=${userId}` });
 	},
 
 	async setStatus(c, params) {
@@ -285,6 +289,7 @@ const userService = {
 		if (status === userConst.status.BAN) {
 			await c.env.kv.delete(KvConst.AUTH_INFO + userId);
 		}
+		await auditService.record(c, { ...auditService.actor(c), action: 'setStatus', detail: `targetUserId=${userId} status=${status}` });
 	},
 
 	async setType(c, params) {
@@ -303,6 +308,7 @@ const userService = {
 			.where(eq(user.userId, userId))
 			.run();
 
+		await auditService.record(c, { ...auditService.actor(c), action: 'setType', detail: `targetUserId=${userId} type=${type}` });
 	},
 
 	async incrUserSendCount(c, quantity, userId) {
@@ -362,6 +368,7 @@ const userService = {
 		await userService.updateUserInfo(c, userId, true);
 
 		await accountService.insert(c, { userId: userId, email, type, name: emailUtils.getName(email) });
+		await auditService.record(c, { ...auditService.actor(c), action: 'addUser', detail: `email=${email}` });
 	},
 
 	async resetDaySendCount(c) {

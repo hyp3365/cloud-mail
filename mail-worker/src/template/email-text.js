@@ -1,4 +1,11 @@
 export default function emailTextTemplate(text) {
+	// 纯文本也要转义：text/plain 里也能藏 <img onerror> 这类 HTML，直接插进页面会执行
+	const escaped = String(text || '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 	return `<!DOCTYPE html>
 <html lang='en' >
 <head>
@@ -29,7 +36,7 @@ export default function emailTextTemplate(text) {
     </style>
 </head>
 <body>
-<span>${text}</span>
+<span>${escaped}</span>
 </body>
 </html>`
 }
