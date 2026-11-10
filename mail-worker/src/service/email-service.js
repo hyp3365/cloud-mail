@@ -1235,6 +1235,18 @@ const emailService = {
 		return list;
 	},
 
+	// 详情页按需取单封邮件完整数据（正文 + 附件）；详情页不再只依赖列表的后台 full 拉取
+	async getDetail(c, emailId, userId, isAdmin) {
+		const row = await orm(c).select({ ...emailListColumns }).from(email)
+			.where(and(eq(email.emailId, emailId), eq(email.isDel, isDel.NORMAL)))
+			.get();
+		if (!row || (row.userId !== userId && !isAdmin)) {
+			throw new BizError('邮件不存在或无权查看', 404);
+		}
+		await this.emailAddAtt(c, [row]);
+		return row;
+	},
+
 	async emailAddAtt(c, list) {
 
 		const emailIds = list.map(item => item.emailId);

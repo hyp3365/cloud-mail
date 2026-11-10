@@ -5,6 +5,10 @@ export function emailList(accountId, allReceive, emailId, timeSort, size, type, 
     return http.get('/email/list', {params: {accountId, allReceive, emailId, timeSort, size, type, full, searchType, text, startDate, endDate}})
 }
 
+export function emailDetail(emailId) {
+    return http.get('/email/detail', {params: {emailId}})
+}
+
 export function emailDelete(emailIds) {
     return http.delete('/email/delete?emailIds=' + emailIds)
 }

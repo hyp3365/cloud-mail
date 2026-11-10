@@ -49,8 +49,15 @@
             <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" class="email-msg" type="warning" show-icon />
           </div>
           <el-scrollbar class="htm-scrollbar" :class="!email.attList?.length ? 'bottom-distance' : ''">
-            <ShadowHtml class="shadow-html" :html="formatImage(email.content)" v-if="email.content" />
-            <pre v-else class="email-text" >{{email.text}}</pre>
+            <div v-if="detailLoading" class="detail-state">正文加载中…</div>
+            <div v-else-if="detailError" class="detail-state">
+              <span>{{ detailError }}</span>
+              <el-button link type="primary" @click="retryDetail">重新加载</el-button>
+            </div>
+            <ShadowHtml class="shadow-html" :html="formatImage(email.content)" v-else-if="displayHtml" />
+            <pre v-else-if="email.text" class="email-text" >{{email.text}}</pre>
+            <div v-else-if="email.emailId" class="detail-state">此邮件没有正文内容</div>
+            <div v-else class="detail-state">邮件数据未加载，请返回列表重新打开</div>
           </el-scrollbar>
           <div class="att" v-if="email.attList?.length > 0">
             <div class="att-title">
@@ -92,7 +99,8 @@ import ShadowHtml from '@/components/shadow-html/index.vue'
 import {computed, reactive, ref, watch, onMounted, onUnmounted, nextTick} from "vue";
 import {useRouter} from 'vue-router'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {emailDelete, emailRead} from "@/request/email.js";
+import {emailDelete, emailDetail, emailRead} from "@/request/email.js";
+import {sanitizeEmailHtml} from "@/utils/email-html.js";
 import {Icon} from "@iconify/vue";
 import {useEmailStore} from "@/store/email.js";
 import {useAccountStore} from "@/store/account.js";
@@ -128,6 +136,53 @@ const email = computed(() => emailStore.contentData.email || {
   text: '',
   recipient: '[]',
 })
+
+// 详情页按需拉取：列表的后台 full 拉取是静默的（失败只记 console、无重试），
+// 退信这类刚到 1 分钟就点开的信可能还没进 detailMap，详情页会一直停在空对象上。
+// 正文有内容就不拉；拉过的 id 不再重复拉。
+const detailLoading = ref(false)
+const detailError = ref('')
+const detailDoneIds = new Set()
+let detailRequesting = false
+
+// 清洗后的正文：content 有值但清洗后为空时（只剩空壳 HTML），不走 iframe，
+// 改走纯文本回退，避免 iframe 空白还把 <pre> 分支顶掉
+const displayHtml = computed(() => {
+  const raw = formatImage(email.value.content || '')
+  if (!raw) return ''
+  return sanitizeEmailHtml(raw)
+})
+
+async function loadDetail(force = false) {
+  const current = email.value
+  if (!current?.emailId || detailRequesting) return
+  if (!force && detailDoneIds.has(current.emailId)) return
+  if (!force && (current.content || current.text)) return
+  detailRequesting = true
+  detailLoading.value = true
+  detailError.value = ''
+  try {
+    const full = await emailDetail(current.emailId)
+    if (full?.emailId) {
+      emailStore.detailMap[full.emailId] = full
+      if (emailStore.contentData.email?.emailId === full.emailId) {
+        emailStore.contentData.email = full
+      }
+      detailDoneIds.add(full.emailId)
+    }
+  } catch (e) {
+    console.error(e)
+    detailError.value = '正文加载失败'
+  } finally {
+    detailLoading.value = false
+    detailRequesting = false
+  }
+}
+
+function retryDetail() {
+  if (email.value?.emailId) detailDoneIds.delete(email.value.emailId)
+  loadDetail(true)
+}
 
 // 收件时存的 SPF/DKIM/DMARC 结果；自己域名验证失败 = 几乎可以肯定是伪造
 const authResult = computed(() => {
@@ -221,6 +276,12 @@ watch(
   { flush: 'post' }
 )
 
+// 切到另一封信时，若正文还没到就按需拉一次
+watch(
+  () => email.value?.emailId,
+  () => nextTick(() => loadDetail())
+)
+
 watch(
   () => [email.value?.name, email.value?.sendEmail, sentViaEmail.value],
   () => nextTick(updateSenderWrap)
@@ -228,6 +289,7 @@ watch(
 
 onMounted(() => {
   tryMarkRead()
+  loadDetail()
   window.addEventListener('keydown', handleKeyDown);
   senderResizeObserver = new ResizeObserver(() => updateSenderWrap())
   if (sendNameRef.value) senderResizeObserver.observe(sendNameRef.value)
@@ -580,6 +642,13 @@ const handleDelete = () => {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
+}
+
+.detail-state {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
 }
 
 .bottom-distance {
