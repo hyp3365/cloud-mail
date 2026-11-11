@@ -46,6 +46,39 @@
    看到成功提示即完成。只会创建 / 更新表结构，不会覆盖已有数据。
 9. **登录网站**：浏览器打开自定义域名，注册管理员账号（用上面 `admin` 那个邮箱），登录即可使用。
 
+### 域名 DNS 加固：SPF 与 DMARC（防伪造）
+
+> 不做这一步，别人可以冒充你的域名发信（例如伪造管理员发“安全漏洞”邮件），收件方只会标记可疑、照样收。做完后，冒充你域名的信会被直接拒收。
+>
+> 以下每个收信域名都要单独做一遍（例如 `example.com` 和 `example.net` 各做一次）。
+
+1. **把 SPF 从软失败改成硬失败**：Cloudflare 左边菜单点 DNS → Records，找到内容是下面这条的 TXT 记录，点 Edit：
+   ```
+   v=spf1 include:_spf.mx.cloudflare.net ~all
+   ```
+   把最后的 `~all` 改成 `-all`，改完是这样，保存：
+   ```
+   v=spf1 include:_spf.mx.cloudflare.net -all
+   ```
+   （如果没有这条记录，点 Add record 新建一条：Type 选 TXT，Name 填 `@`，Content 填上面改好的内容，TTL 选 Auto，保存。）
+2. **加 DMARC 记录**：点 Add record，Type 选 TXT，Name 只填 `_dmarc`（别带域名后缀，Cloudflare 会自己补），Content 填：
+   ```
+   v=DMARC1; p=reject; pct=100
+   ```
+   TTL 选 Auto，保存。
+3. **验证**：等几分钟 DNS 生效后检查（把 `example.com` 换成你的域名）：
+   ```bash
+   dig TXT example.com
+   dig TXT _dmarc.example.com
+   ```
+   看到 SPF 是 `-all`、DMARC 是 `p=reject` 即完成。
+
+注意事项：
+
+- `~all` 是“软失败”（没列出的发信方只算可疑，照样收），`-all` 是“硬失败”（没列出的直接拒收）；`p=reject` 是让收件方直接拒收 DMARC 验证失败的信。两者配合，伪造才拦得住。
+- 一条域名只能有一条 SPF 记录。如果你还用 Resend 等第三方发信，按它家文档把它的 `include:` 也加进**同一条** SPF 里，多个 include 用空格连起来，不要另建一条 SPF 记录。
+- 发信用的 DKIM 也要配好（例如 Resend 后台给域名加 DKIM），否则你自己发的信也可能被当成伪造拒收。
+
 ### 环境配置：更多变量
 
 除上面三项必填变量外，还可以在 Worker Variables 里配这些可选变量：
