@@ -158,6 +158,7 @@ async function loadDetail(force = false) {
   if (!current?.emailId || detailRequesting) return
   if (!force && detailDoneIds.has(current.emailId)) return
   if (!force && (current.content || current.text)) return
+  const targetId = current.emailId
   detailRequesting = true
   detailLoading.value = true
   detailError.value = ''
@@ -176,6 +177,11 @@ async function loadDetail(force = false) {
   } finally {
     detailLoading.value = false
     detailRequesting = false
+    // 抓取期间用户切了信（或重进了详情页）：给当前这封再补拉一次；
+    // 同一封失败不自动重试，避免失败循环
+    if (email.value?.emailId && email.value.emailId !== targetId) {
+      loadDetail()
+    }
   }
 }
 

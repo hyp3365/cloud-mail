@@ -6,7 +6,8 @@ export function emailList(accountId, allReceive, emailId, timeSort, size, type, 
 }
 
 export function emailDetail(emailId) {
-    return http.get('/email/detail', {params: {emailId}})
+    // noMsg：失败只走详情页内的“正文加载失败 + 重新加载”，不再额外弹全局提示
+    return http.get('/email/detail', {params: {emailId}, noMsg: true})
 }
 
 export function emailDelete(emailIds) {
