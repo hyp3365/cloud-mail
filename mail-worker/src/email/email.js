@@ -143,7 +143,15 @@ export async function email(message, env, ctx) {
 
 		for (let item of email.attachments) {
 			let attachment = { ...item };
-			attachment.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(item.filename);
+			// 退信的 DSN 部分（message/delivery-status、message/rfc822）没有 filename；
+			// 不补默认值的话附件行 filename 为 null，前端取扩展名会抛错，
+			// 而且 R2 的 Content-Disposition 会变成 filename=null
+			if (!attachment.filename) {
+				attachment.filename = attachment.mimeType === 'message/rfc822' ? 'original-message.eml'
+					: attachment.mimeType === 'message/delivery-status' ? 'delivery-status.txt'
+					: 'attachment';
+			}
+			attachment.key = constant.ATTACHMENT_PREFIX + await fileUtils.getBuffHash(attachment.content) + fileUtils.getExtFileName(attachment.filename);
 			attachment.size = item.content.length ?? item.content.byteLength;
 			attachments.push(attachment);
 			if (attachment.contentId) {
